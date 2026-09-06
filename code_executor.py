@@ -1,18 +1,13 @@
 """
-code_executor.py
-----------------
 Safely executes AI-generated Python code in an isolated subprocess.
 
-Safety strategy (prototype-grade):
-  1. Pattern scanning  — block dangerous calls before execution even starts.
-  2. Subprocess isolation — code runs in a child process, not via exec() in
-     the main app. A crash or exception cannot affect Streamlit.
-  3. Timeout enforcement — kills the process after EXECUTION_TIMEOUT seconds,
-     preventing infinite loops.
-  4. stdout/stderr capture — output is returned as a string, never written
-     directly to the terminal.
+Safety approach (prototype-grade):
+  - Pattern scanning blocks dangerous calls before execution starts.
+  - Subprocess isolation ensures a crash cannot affect the Streamlit process.
+  - Timeout enforcement kills infinite loops after EXECUTION_TIMEOUT seconds.
+  - stdout/stderr are captured and returned; nothing is written to the terminal.
 
-NOTE: For a production system, use Docker or gVisor for full sandboxing.
+For production use, replace subprocess isolation with Docker or gVisor.
 """
 
 import subprocess
@@ -21,11 +16,8 @@ import tempfile
 import os
 import re
 
-# How long (in seconds) to allow code to run before killing it
 EXECUTION_TIMEOUT = 10
 
-# Patterns that indicate dangerous operations — refuse to execute if found.
-# Each entry is a (regex_pattern, human_readable_reason) tuple.
 BLOCKED_PATTERNS = [
     # File system writes / deletes
     (r"\bopen\s*\(.*['\"]w['\"]", "writing to files"),
@@ -78,11 +70,11 @@ def execute_code(code: str) -> dict:
 
     Returns:
         A dict with keys:
-            'success'  (bool)   — True if code ran without error
-            'stdout'   (str)    — Captured standard output
-            'stderr'   (str)    — Captured standard error / exception text
-            'blocked'  (bool)   — True if execution was refused due to safety
-            'message'  (str)    — Human-readable status message
+            'success'  (bool) — True if code ran without error
+            'stdout'   (str)  — Captured standard output
+            'stderr'   (str)  — Captured standard error / exception text
+            'blocked'  (bool) — True if execution was refused due to safety
+            'message'  (str)  — Human-readable status message
     """
     result = {
         "success": False,
@@ -92,7 +84,6 @@ def execute_code(code: str) -> dict:
         "message": "",
     }
 
-    # --- Step 1: Safety scan ---
     is_safe, danger_reason = check_for_dangerous_patterns(code)
     if not is_safe:
         result["blocked"] = True
@@ -102,9 +93,6 @@ def execute_code(code: str) -> dict:
         )
         return result
 
-    # --- Step 2: Write code to a temp file ---
-    # Using a temp file is cleaner than passing code via stdin —
-    # it avoids shell escaping issues and gives proper tracebacks with line numbers.
     try:
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -118,23 +106,22 @@ def execute_code(code: str) -> dict:
         result["message"] = f"Failed to create temporary file: {str(e)}"
         return result
 
-    # --- Step 3: Run in subprocess ---
     try:
         proc = subprocess.run(
-            [sys.executable, tmp_path],   # Use the same Python interpreter running Streamlit
-            capture_output=True,           # Capture both stdout and stderr
-            text=True,                     # Decode output as UTF-8 text
-            timeout=EXECUTION_TIMEOUT,     # Kill after timeout seconds
+            [sys.executable, tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=EXECUTION_TIMEOUT,
         )
 
         result["stdout"] = proc.stdout.strip()
         result["stderr"] = proc.stderr.strip()
         result["success"] = proc.returncode == 0
-
-        if result["success"]:
-            result["message"] = "Code executed successfully."
-        else:
-            result["message"] = "Code ran but exited with an error. See the error output below."
+        result["message"] = (
+            "Code executed successfully."
+            if result["success"]
+            else "Code ran but exited with an error. See the error output below."
+        )
 
     except subprocess.TimeoutExpired:
         result["message"] = (
@@ -146,10 +133,9 @@ def execute_code(code: str) -> dict:
         result["message"] = f"Unexpected error during execution: {str(e)}"
 
     finally:
-        # Always clean up the temp file
         try:
             os.unlink(tmp_path)
         except Exception:
-            pass  # Not critical if cleanup fails
+            pass
 
     return result

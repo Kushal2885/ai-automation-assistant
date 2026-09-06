@@ -1,58 +1,16 @@
-"""
-ai_handler.py
--------------
-Handles all communication with the Google Gemini API via the official
-google-genai SDK (NOT the deprecated google-generativeai package).
-
-SDK docs: https://github.com/googleapis/python-genai
-"""
-
 import os
 from pathlib import Path
 from google import genai
 from google.genai import types, errors
 from dotenv import load_dotenv
 
-# Load .env from the project root explicitly.
-# Using an absolute path means this works correctly regardless of which
-# directory Streamlit is launched from.
+
 _PROJECT_ROOT = Path(__file__).resolve().parent
 _ENV_FILE = _PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=_ENV_FILE, override=True)
 
-# ---------------------------------------------------------------------------
-# Model configuration
-# ---------------------------------------------------------------------------
-def check_api_key_configured() -> tuple[bool, str]:
-    """
-    Safe diagnostic: reports only whether GEMINI_API_KEY is present and
-    non-placeholder. Never returns or logs the key value itself.
-
-    Returns:
-        (is_configured, status_message)
-    """
-    load_dotenv(dotenv_path=_ENV_FILE, override=True)  # re-load in case .env was created after startup
-    key = os.getenv("GEMINI_API_KEY", "")
-    env_exists = _ENV_FILE.exists()
-
-    if not env_exists:
-        return False, f".env file not found at: {_ENV_FILE}"
-    if not key:
-        return False, f".env file exists but GEMINI_API_KEY is empty or missing"
-    if key == "your_gemini_api_key_here":
-        return False, "GEMINI_API_KEY is still set to the placeholder value"
-    return True, f"GEMINI_API_KEY is set (length={len(key)}, starts with '{key[:4]}')"
-
-
-# ---------------------------------------------------------------------------
-# Model configuration
-# ---------------------------------------------------------------------------
-# gemini-3.6-flash: current fast Flash model.
-# Can be overridden via GEMINI_MODEL in .env.
 DEFAULT_MODEL = "gemini-3.6-flash"
 
-# System prompt — instructs the model to always reply in three labeled sections.
-# This structure makes parsing reliable and keeps the UI clean.
 SYSTEM_PROMPT = """You are an AI Automation Assistant that helps users with coding tasks and code analysis.
 
 When a user sends a message, always respond using EXACTLY this format with these three section headers:
@@ -78,12 +36,30 @@ Rules:
 """
 
 
+def check_api_key_configured() -> tuple[bool, str]:
+    """
+    Safe diagnostic: reports only whether GEMINI_API_KEY is present and
+    non-placeholder. Never returns or logs the key value itself.
+
+    Returns:
+        (is_configured, status_message)
+    """
+    load_dotenv(dotenv_path=_ENV_FILE, override=True)
+    key = os.getenv("GEMINI_API_KEY", "")
+    env_exists = _ENV_FILE.exists()
+
+    if not env_exists:
+        return False, f".env file not found at: {_ENV_FILE}"
+    if not key:
+        return False, f".env file exists but GEMINI_API_KEY is empty or missing"
+    if key == "your_gemini_api_key_here":
+        return False, "GEMINI_API_KEY is still set to the placeholder value"
+    return True, f"GEMINI_API_KEY is set (length={len(key)}, starts with '{key[:4]}')"
+
+
 def get_ai_response(user_message: str, conversation_history: list) -> tuple[str, str]:
     """
     Send the user's message to the Gemini API and return the structured response.
-
-    Uses client.chats.create() so conversation history is handled natively by
-    the SDK — no manual history stitching required.
 
     Args:
         user_message:         The raw input from the user (natural language or code).
@@ -93,13 +69,10 @@ def get_ai_response(user_message: str, conversation_history: list) -> tuple[str,
     Returns:
         A tuple of (response_text, error_message).
         On success: (text, "")
-        On failure: ("",  human-readable error string)
+        On failure: ("", human-readable error string)
     """
-    # --- Re-load .env explicitly here too, in case the file was created
-    #     after the module was first imported (e.g. user creates it mid-session)
     load_dotenv(dotenv_path=_ENV_FILE, override=True)
 
-    # --- Validate API key ---
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return "", (
@@ -115,12 +88,9 @@ def get_ai_response(user_message: str, conversation_history: list) -> tuple[str,
 
     model_name = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
 
-    # --- Convert Streamlit history format → google-genai Content objects ---
-    # Streamlit stores: [{"role": "user"|"assistant", "content": "..."}]
-    # Gemini SDK expects: list[types.Content] with role "user" or "model"
+    # Gemini SDK uses role "model" for assistant turns; Streamlit uses "assistant".
     history_contents: list[types.Content] = []
     for msg in conversation_history:
-        # Gemini uses "model" for assistant turns; map accordingly
         sdk_role = "model" if msg["role"] == "assistant" else "user"
         history_contents.append(
             types.Content(
@@ -132,11 +102,6 @@ def get_ai_response(user_message: str, conversation_history: list) -> tuple[str,
     try:
         client = genai.Client(api_key=api_key)
 
-        # Create a chat session with:
-        #   - system_instruction: shapes every response
-        #   - history:            all prior turns for multi-turn context
-        #   - temperature 0.3:    focused, deterministic code output
-        #   - max_output_tokens:  generous limit for detailed code responses
         chat = client.chats.create(
             model=model_name,
             config=types.GenerateContentConfig(
@@ -149,7 +114,6 @@ def get_ai_response(user_message: str, conversation_history: list) -> tuple[str,
 
         response = chat.send_message(user_message)
 
-        # Guard: Gemini can occasionally return an empty response
         if not response.text or not response.text.strip():
             return "", (
                 "The AI returned an empty response. "
@@ -159,9 +123,7 @@ def get_ai_response(user_message: str, conversation_history: list) -> tuple[str,
 
         return response.text, ""
 
-    # --- Granular error handling ---
     except errors.APIError as e:
-        # SDK wraps all HTTP-level errors in APIError with a .code and .message
         code = getattr(e, "code", None)
         message = getattr(e, "message", str(e))
 
@@ -187,7 +149,6 @@ def get_ai_response(user_message: str, conversation_history: list) -> tuple[str,
             return "", f"Gemini API error (code {code}): {message}"
 
     except Exception as e:
-        # Catch-all for unexpected errors (network timeouts, JSON decode issues, etc.)
         return "", f"Unexpected error communicating with Gemini API: {str(e)}"
 
 
@@ -208,32 +169,27 @@ def parse_response(raw_response: str) -> dict:
         "expected_output": "",
     }
 
-    # Section headers the model is instructed to always include
     sections = {
-        "explanation":    "[EXPLANATION]",
-        "code":           "[CODE]",
+        "explanation":     "[EXPLANATION]",
+        "code":            "[CODE]",
         "expected_output": "[EXPECTED OUTPUT]",
     }
 
-    # Find the character position of each header in the response
     positions = {}
     for key, header in sections.items():
         idx = raw_response.find(header)
         if idx != -1:
             positions[key] = idx
 
-    # Extract text between consecutive headers
     sorted_keys = sorted(positions, key=lambda k: positions[k])
     for i, key in enumerate(sorted_keys):
         start = positions[key] + len(sections[key])
         end = positions[sorted_keys[i + 1]] if i + 1 < len(sorted_keys) else len(raw_response)
         result[key] = raw_response[start:end].strip()
 
-    # If parsing found nothing (model ignored the format), show the whole response
     if not any(result.values()):
         result["explanation"] = raw_response.strip()
 
-    # Normalise "no code" / "N/A" markers to empty string for clean UI logic
     if result["code"].upper().strip() in ("NO_CODE", "NO CODE", "NONE", "N/A", ""):
         result["code"] = ""
 
