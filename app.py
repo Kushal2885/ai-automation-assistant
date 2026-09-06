@@ -4,7 +4,6 @@ from code_executor import execute_code
 
 st.set_page_config(
     page_title="AI Automation Assistant",
-    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -75,7 +74,7 @@ def render_results(results: dict):
     if parsed["explanation"]:
         st.markdown(
             f'<div class="section-panel">'
-            f'<div class="section-title">🧠 AI Explanation</div>'
+            f'<div class="section-title">AI Explanation</div>'
             f'{parsed["explanation"]}'
             f'</div>',
             unsafe_allow_html=True,
@@ -84,7 +83,7 @@ def render_results(results: dict):
     if parsed["code"]:
         st.markdown(
             '<div class="section-panel code-panel">'
-            '<div class="section-title">💻 Generated Code</div>'
+            '<div class="section-title">Generated Code</div>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -93,7 +92,7 @@ def render_results(results: dict):
     if parsed["expected_output"]:
         st.markdown(
             f'<div class="section-panel">'
-            f'<div class="section-title">📋 Expected Output (from AI)</div>'
+            f'<div class="section-title">Expected Output (from AI)</div>'
             f'<pre style="margin:0;white-space:pre-wrap;">{parsed["expected_output"]}</pre>'
             f'</div>',
             unsafe_allow_html=True,
@@ -103,7 +102,7 @@ def render_results(results: dict):
         if execution["blocked"]:
             st.markdown(
                 f'<div class="section-panel blocked-panel">'
-                f'<div class="section-title">🚫 Execution Blocked</div>'
+                f'<div class="section-title">Execution Blocked</div>'
                 f'{execution["message"]}'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -112,7 +111,7 @@ def render_results(results: dict):
             output_text = execution["stdout"] if execution["stdout"] else "(No output produced)"
             st.markdown(
                 f'<div class="section-panel output-panel">'
-                f'<div class="section-title">✅ Actual Execution Output</div>'
+                f'<div class="section-title">Actual Execution Output</div>'
                 f'<pre style="margin:0;white-space:pre-wrap;">{output_text}</pre>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -124,14 +123,14 @@ def render_results(results: dict):
             if stdout_text:
                 st.markdown(
                     f'<div class="section-panel output-panel">'
-                    f'<div class="section-title">📤 Partial Output (before error)</div>'
+                    f'<div class="section-title">Partial Output (before error)</div>'
                     f'<pre style="margin:0;white-space:pre-wrap;">{stdout_text}</pre>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
             st.markdown(
                 f'<div class="section-panel error-panel">'
-                f'<div class="section-title">❌ Execution Error</div>'
+                f'<div class="section-title">Execution Error</div>'
                 f'<pre style="margin:0;white-space:pre-wrap;color:#ff8a80;">{error_text}</pre>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -141,12 +140,8 @@ def render_results(results: dict):
         st.info("Code generated but not yet executed.")
 
 
-col1, col2 = st.columns([0.08, 0.92])
-with col1:
-    st.markdown("## 🤖")
-with col2:
-    st.markdown("## AI Automation Assistant")
-    st.caption("Enter a coding task or paste code to analyze. The assistant will explain, generate, and run Python code.")
+st.markdown("## AI Automation Assistant")
+st.caption("Enter a coding task or paste code to analyze. The assistant will explain, generate, and run Python code.")
 
 st.divider()
 
@@ -155,13 +150,13 @@ if st.session_state.conversation_history:
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             st.markdown(
-                f'<div class="user-bubble">👤 <strong>You:</strong> {msg["content"]}</div>',
+                f'<div class="user-bubble"><strong>You:</strong> {msg["content"]}</div>',
                 unsafe_allow_html=True,
             )
         else:
             preview = msg["content"][:120].replace("\n", " ")
             st.markdown(
-                f'<div class="assistant-bubble">🤖 <strong>Assistant:</strong> {preview}…</div>',
+                f'<div class="assistant-bubble"><strong>Assistant:</strong> {preview}…</div>',
                 unsafe_allow_html=True,
             )
     st.markdown("<br>", unsafe_allow_html=True)
@@ -190,10 +185,10 @@ user_input = st.text_area(
 col_btn, col_clear, col_spacer = st.columns([0.15, 0.15, 0.70])
 
 with col_btn:
-    run_clicked = st.button("▶ Run", type="primary", use_container_width=True)
+    run_clicked = st.button("Run", type="primary", use_container_width=True)
 
 with col_clear:
-    clear_clicked = st.button("🗑 Clear", use_container_width=True)
+    clear_clicked = st.button("Clear", use_container_width=True)
 
 if clear_clicked:
     st.session_state.conversation_history = []
